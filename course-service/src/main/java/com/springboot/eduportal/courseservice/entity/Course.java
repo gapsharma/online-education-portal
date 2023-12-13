@@ -2,6 +2,7 @@ package com.springboot.eduportal.courseservice.entity;
 
 import java.math.BigDecimal;
 
+import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -16,6 +17,7 @@ public class Course {
 	@GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "course_sequence")
 	private Long uuid;
 	
+	@Column()
 	private String technology;
 	
 	private String name;

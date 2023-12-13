@@ -13,6 +13,12 @@ public interface CourseRepository extends JpaRepository<Course, Long> {
 	
 	public List<Course> findByTechnology(String technology);
 	
+	public List<Course> findByTechnologyStartingWith(String technology);
+
+	public List<Course> findByTechnologyContaining(String technology);
+
+	//public List<Course> findByTechnologyExact(String technology);
+	
 	public Optional<List<Course>> findByIdIn(List<Long> courseIds);
 
 }

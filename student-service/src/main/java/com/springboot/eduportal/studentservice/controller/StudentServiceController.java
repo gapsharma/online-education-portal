@@ -6,9 +6,11 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.MessageSource;
 import org.springframework.context.i18n.LocaleContextHolder;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.config.annotation.web.configurers.HeadersConfigurer.CacheControlConfig;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -19,6 +21,7 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 import com.springboot.eduportal.studentservice.client.CourseClient;
+import com.springboot.eduportal.studentservice.configuration.CourseCatalogConfiguration;
 import com.springboot.eduportal.studentservice.configuration.StudentServiceConfiguration;
 import com.springboot.eduportal.studentservice.exception.NotPremiumMemberException;
 import com.springboot.eduportal.studentservice.exception.OpenQuestionsAllowedExceededException;
@@ -31,6 +34,8 @@ import com.springboot.eduportal.studentservice.model.Student;
 import com.springboot.eduportal.studentservice.repository.QuestionRepository;
 import com.springboot.eduportal.studentservice.repository.RegisterRepository;
 import com.springboot.eduportal.studentservice.repository.StudentRepository;
+import com.springboot.eduportal.studentservice.service.RegisterService;
+import com.springboot.eduportal.studentservice.service.Vehicle;
 
 import feign.FeignException;
 
@@ -38,23 +43,58 @@ import feign.FeignException;
 @RequestMapping(path = "/students")
 public class StudentServiceController {
 
-	@Autowired
+	// @Autowired
 	private MessageSource messageSource;
+	
+	private Vehicle vehicle;
 
-	@Autowired
+	// @Autowired
 	private StudentRepository studentRepository;
 
-	@Autowired
+	// @Autowired
 	private RegisterRepository registerRepository;
 
-	@Autowired
+	// @Autowired
 	private QuestionRepository questionRepository;
 
-	@Autowired
+	// @Autowired
 	private CourseClient courseClient;
 
-	@Autowired
+	// @Autowired
 	private StudentServiceConfiguration serviceConfiguration;
+	
+	// @Autowired
+	RegisterService registerService;
+	
+	// @Autowired
+	CourseCatalogConfiguration courseCatalogConfiguration;
+	
+	// @Autowired
+	public void setVehicle(Vehicle v) {
+		this.vehicle = v;
+	}
+	
+	protected StudentServiceController(MessageSource messageSource, Vehicle vehicle,
+			StudentRepository studentRepository, RegisterRepository registerRepository,
+			QuestionRepository questionRepository, CourseClient courseClient,
+			StudentServiceConfiguration serviceConfiguration, RegisterService registerService,
+			CourseCatalogConfiguration courseCatalogConfiguration) {
+		super();
+		this.messageSource = messageSource;
+		this.vehicle = vehicle;
+		this.studentRepository = studentRepository;
+		this.registerRepository = registerRepository;
+		this.questionRepository = questionRepository;
+		this.courseClient = courseClient;
+		this.serviceConfiguration = serviceConfiguration;
+		this.registerService = registerService;
+		this.courseCatalogConfiguration = courseCatalogConfiguration;
+	}
+
+	@GetMapping("/coursecatalog")
+	public String getCourseCatalog() {
+		return "The course " + courseCatalogConfiguration.getCourseName() + " is authored by " + courseCatalogConfiguration.getAuthor();
+	}
 
 	@PostMapping()
 	public ResponseEntity<Student> addStudent(@RequestBody Student student) {
@@ -91,12 +131,8 @@ public class StudentServiceController {
 			throw fex;
 		}
 		
-		studentRepository.findById(register.getStudentId()).orElseThrow(() -> {
-			return new StudentNotFoundException(messageSource.getMessage("error.message.student_not_found",
-					new Object[] { register.getStudentId() }, LocaleContextHolder.getLocale()));
-		});
+		registerService.registerStudent(register);
 
-		registerRepository.save(register);
 		URI uri = ServletUriComponentsBuilder.fromCurrentRequest().build().toUri();
 
 		return ResponseEntity.created(uri).build();
@@ -106,7 +142,7 @@ public class StudentServiceController {
 	public ResponseEntity<Register> updateRegisterForAStudent(@RequestBody Register register,
 			@PathVariable(name = "student-id") Long studentId, @PathVariable(name = "course-id") Long courseId) {
 		Register savedRecord = registerRepository.findByStudentIdAndCourseId(studentId, courseId).orElseThrow();
-		
+
 		savedRecord.setPremium(register.isPremium());
 
 		registerRepository.save(savedRecord);
@@ -135,39 +171,44 @@ public class StudentServiceController {
 		return courses;
 	}
 
-	
 	@PostMapping("{student-id}/courses/{course-id}/questions")
 	public ResponseEntity<Question> postQuestionByStudent(@PathVariable(name = "student-id") Long studentId,
-														  @PathVariable(name = "course-id") Long courseId,
-														  @RequestBody Question question) {
+			@PathVariable(name = "course-id") Long courseId, @RequestBody Question question) {
 		Register student = registerRepository.findByStudentIdAndCourseId(studentId, courseId).orElseThrow(() -> {
-			return new StudentNotEnrolledToCourseException(messageSource.getMessage("error.message.student_not_enrolled_to_course", new Object[] {studentId, courseId}, LocaleContextHolder.getLocale()));
+			return new StudentNotEnrolledToCourseException(
+					messageSource.getMessage("error.message.student_not_enrolled_to_course",
+							new Object[] { studentId, courseId }, LocaleContextHolder.getLocale()));
 		});
-		
-		if ( !student.isPremium() ) {
-			throw new NotPremiumMemberException(messageSource.getMessage("error.message.not_premium_member", new Object[] {studentId, courseId}, LocaleContextHolder.getLocale()));
+
+		if (!student.isPremium()) {
+			throw new NotPremiumMemberException(messageSource.getMessage("error.message.not_premium_member",
+					new Object[] { studentId, courseId }, LocaleContextHolder.getLocale()));
 		}
-		
-		long noOfquestionsPostedByStudent = questionRepository.findByStudentIdAndCourseId(studentId, courseId).get().stream().count();
-		if ( noOfquestionsPostedByStudent == serviceConfiguration.getMaxOpenQuestionsPerStudent() ) {
-			throw new OpenQuestionsAllowedExceededException(messageSource.getMessage("error.message.open_questions_allowed_exceeded", new Object[] {studentId, courseId}, LocaleContextHolder.getLocale()));
+
+		long noOfquestionsPostedByStudent = questionRepository.findByStudentIdAndCourseId(studentId, courseId).get()
+				.stream().count();
+		if (noOfquestionsPostedByStudent == serviceConfiguration.getMaxOpenQuestionsPerStudent()) {
+			throw new OpenQuestionsAllowedExceededException(
+					messageSource.getMessage("error.message.open_questions_allowed_exceeded",
+							new Object[] { studentId, courseId }, LocaleContextHolder.getLocale()));
 		}
-		
+
 		question.setCourseId(courseId);
 		question.setStudentId(studentId);
 		Question savedQuestion = questionRepository.save(question);
-		
-		URI uri = ServletUriComponentsBuilder.fromCurrentRequest().path("/{id}").buildAndExpand(savedQuestion.getId()).toUri();
+
+		URI uri = ServletUriComponentsBuilder.fromCurrentRequest().path("/{id}").buildAndExpand(savedQuestion.getId())
+				.toUri();
 
 		return ResponseEntity.created(uri).build();
 	}
-	
+
 	@GetMapping("{student-id}/courses/{course-id}/questions")
 	public List<Question> getQuestionsByStudent(@PathVariable(name = "student-id") Long studentId,
-														  @PathVariable(name = "course-id") Long courseId
-														  ) {
+			@PathVariable(name = "course-id") Long courseId) {
 
-		return  questionRepository.findByStudentIdAndCourseId(studentId, courseId).orElseGet(() -> new ArrayList<Question>());
-	}	
+		return questionRepository.findByStudentIdAndCourseId(studentId, courseId)
+				.orElseGet(() -> new ArrayList<Question>());
+	}
 
 }

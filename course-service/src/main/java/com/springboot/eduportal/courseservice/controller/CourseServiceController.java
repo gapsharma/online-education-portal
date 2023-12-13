@@ -1,7 +1,6 @@
 package com.springboot.eduportal.courseservice.controller;
 
 import java.net.URI;
-import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -27,7 +26,7 @@ import com.springboot.eduportal.courseservice.repository.CourseRepository;
 @RequestMapping("/courses")
 public class CourseServiceController {
 	
-	@Autowired
+	// @Autowired
 	private MessageSource messageSource;
 	
 	@Autowired
@@ -43,6 +42,7 @@ public class CourseServiceController {
 
 	@GetMapping("/{uuid}")
 	public Course getCourseDetails(@PathVariable(name = "uuid") long id){
+		System.out.println("This one ?");
 		Course course = courseRepository.findById(id).orElseThrow(() -> {
 			return new CourseNotFoundException(messageSource.getMessage("error.message.course_not_found", new Object[] {id}, LocaleContextHolder.getLocale()));
 		});
@@ -50,8 +50,10 @@ public class CourseServiceController {
 		return course;
 	}
 
+	// @GetMapping(produces = {"application/xml"})
 	@GetMapping
 	public List<Course> getCourses(@RequestParam(name = "ids", required = false) List<Long> ids) {
+		System.out.println("Or this one ?");
 		List<Course> courses = null;
 		if (ids == null) {
 			courses = courseRepository.findAll();
@@ -64,7 +66,9 @@ public class CourseServiceController {
 
 	@GetMapping("/technology/{technology}")
 	public List<Course> getCoursesByTechnology(@PathVariable String technology) {
+		// Exact name
 		List<Course> courses = courseRepository.findByTechnology(technology);
+		// List<Course> courses = courseRepository.findByTechnologyExact(technology);
 
 		return courses;
 	}
